@@ -1,0 +1,85 @@
+services:
+  socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:v0.5.0@sha256:753044cb0851ce53ab44c2504872ff02ae37be9c294fa8abea3754074e61eab4
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      SERVICES: 0
+      TASKS: 0
+      POST: 0
+    networks:
+      - docker_socket
+
+  traefik:
+    image: traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${APPDATA}/traefik:/etc/traefik
+      - ${APPDATA}/traefik/logs:/var/log/traefik
+      - ${APPDATA}/traefik/crowdsec/lapi-key:/etc/traefik/crowdsec/lapi-key
+    labels:
+      # Unraid UI
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/ibracorp/unraid-templates/master/icons/traefik.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:8080]/"
+      net.unraid.docker.shell: "sh"
+      # Traefik
+      traefik.http.routers.api.entryPoints: "https"
+      traefik.http.routers.api.service: "api@internal"
+      traefik.enable: "false"
+    networks:
+      - towernet
+      - auth
+      - docker_socket
+      - crowdsec
+    environment:
+      DOCKER_HOST: tcp://socket-proxy:2375
+      DESEC_TOKEN: ${TRAEFIK_DESEC_TOKEN:?required}
+
+  frpc:
+    image: ghcr.io/fatedier/frpc:v0.71.0@sha256:8dd029fa1f995629d6f31157f270633224f39492da079b099ce39dddaad3e191
+    restart: unless-stopped
+    command:
+      - "-c"
+      - "/etc/frp/frpc.toml"
+    volumes:
+      - ${APPDATA}/frpc/frpc.toml:/etc/frp/frpc.toml:ro
+    networks:
+      towernet:
+        ipv4_address: 172.18.0.29
+
+  crowdsec:
+    image: ghcr.io/crowdsecurity/crowdsec:v1.8.1@sha256:dd16bad0a1622fe1653a85e91678223d28f3bb5459d8c9604dcd0c397da06975
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      COLLECTIONS: >-
+        crowdsecurity/traefik
+        crowdsecurity/appsec-virtual-patching
+        crowdsecurity/appsec-generic-rules
+    volumes:
+      - ${APPDATA}/crowdsec/config:/etc/crowdsec
+      - ${APPDATA}/crowdsec/data:/var/lib/crowdsec/data
+      - ${APPDATA}/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ${APPDATA}/traefik/logs:/var/log/traefik:ro
+    networks:
+      - crowdsec
+    labels:
+      traefik.enable: "false"
+
+networks:
+  docker_socket:
+    internal: true
+  crowdsec:
+  towernet:
+    # TODO: replace with "ingress" once remaining containers are migrated
+    name: towernet
+    external: true
+  auth:
+    name: auth
+    external: true
