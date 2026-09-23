@@ -1,0 +1,85 @@
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+entryPoints:
+  # Not used in apps, but redirect everything from HTTP to HTTPS
+  http:
+    address: :80
+    proxyProtocol:
+      trustedIPs:
+        - "172.18.0.29/32"
+    http:
+      aliasHeadersStrategy: delete
+      redirections:
+        entryPoint:
+          to: https
+          scheme: https
+
+  # HTTPS endpoint, with domain wildcard
+  https:
+    address: :443
+    proxyProtocol:
+      trustedIPs:
+        - "172.18.0.29/32"
+    http:
+      aliasHeadersStrategy: delete
+      tls:
+        # Generate a wildcard domain certificate
+        certResolver: letsencrypt
+        domains:
+          - main: bakers.house
+            sans:
+              - "*.bakers.house"
+      middlewares:
+        - crowdsec@file
+        - securityHeaders@file
+
+providers:
+  providersThrottleDuration: 2s
+
+  file:
+    filename: /etc/traefik/fileConfig.yml
+    watch: true
+
+  docker:
+    watch: true
+    network: towernet
+    defaultRule: "Host(`{{ lower (trimPrefix `/` .Name )}}.bakers.house`)"
+    exposedByDefault: false
+
+api:
+  dashboard: true
+  insecure: false
+
+# Log level INFO|DEBUG|ERROR
+log:
+  level: INFO
+
+accessLog:
+  filePath: /var/log/traefik/access.json
+  format: json
+  bufferingSize: 100
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: drop
+      names:
+        User-Agent: keep
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: dan@bakers.house
+      storage: /etc/traefik/acme.json
+      dnsChallenge:
+        provider: desec
+
+experimental:
+  plugins:
+    themepark:
+      moduleName: "github.com/packruler/traefik-themepark"
+      version: "v1.4.0"
+    bouncer:
+      moduleName: "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      version: "v1.7.0"

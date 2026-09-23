@@ -28,10 +28,6 @@ services:
       net.unraid.docker.icon: "https://raw.githubusercontent.com/ibracorp/unraid-templates/master/icons/traefik.png"
       net.unraid.docker.webui: "http://[IP]:[PORT:8080]/"
       net.unraid.docker.shell: "sh"
-      # Traefik
-      traefik.http.routers.api.entryPoints: "https"
-      traefik.http.routers.api.service: "api@internal"
-      traefik.enable: "false"
     networks:
       - towernet
       - auth
@@ -70,12 +66,13 @@ services:
     networks:
       - crowdsec
     labels:
-      traefik.enable: "false"
+      bakers.monitoring.logs: "true"
 
 networks:
-  docker_socket:
-    internal: true
   crowdsec:
+  docker_socket:
+    name: docker_socket
+    external: true
   towernet:
     # TODO: replace with "ingress" once remaining containers are migrated
     name: towernet
