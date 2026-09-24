@@ -25,6 +25,9 @@ EXCEPTIONS: dict[str, set[str]] = {
     # LazyLibrarian has no versioned releases, only commit builds that
     # Renovate can't order; it follows the digest of `latest` instead.
     "3_downloads/lazylibrarian": {"pinned-image"},
+    # Plex clients on the LAN, and Plex's remote access, connect to Plex's own
+    # port rather than going through Traefik.
+    "4_media/plex": {"routed-ports"},
 }
 
 # Image prefixes allowed outside Docker Hub for every stack. Their updates wait

@@ -33,12 +33,12 @@
       dependencyDashboardApproval: true,
     },
     {
-      // Tags look like release-4.0.20.3014; the release-<commit> tags beside
-      // them don't match and are ignored.
+      // Tags look like release-4.0.20.3014, or release-1.43.4.10903-e5521bd8c
+      // for Plex; the release-<commit> tags beside them don't match.
       description: "hotio images",
       matchDatasources: ["docker"],
       matchPackageNames: ["ghcr.io/hotio/**"],
-      versioning: "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?$",
+      versioning: "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-[0-9a-f]{7,})?$",
     },
     {
       // Tags look like v0.11.0-ls272, where ls<n> is linuxserver's build.

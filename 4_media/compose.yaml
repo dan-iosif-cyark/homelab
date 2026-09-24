@@ -1,0 +1,210 @@
+name: media
+
+services:
+  # Plex is still reached on its LAN port as well as through Traefik: clients
+  # on the LAN and Plex's remote access connect to it directly.
+  plex:
+    image: ghcr.io/hotio/plex:release-1.43.4.10903-e5521bd8c@sha256:10ab071bf88b3346f6e3d82ccc55ad3fb4f0f34a55a6a6ebf9fcd170985c7095
+    restart: unless-stopped
+    environment:
+      PUID: 99
+      PGID: 100
+      UMASK: "002"
+      TZ: ${TZ}
+      TP_HOTIO: "true"
+      TP_THEME: dark
+    volumes:
+      - ${APPDATA}/plex:/config
+      - ${DATA}/transcode:/transcode
+      - ${DATA}/media:/data/media
+      - ${DATA}/lab/theme.park/98-themepark-plex:/etc/cont-init.d/98-themepark
+    networks:
+      - ingress
+      - towernet
+    ports:
+      - "192.168.1.192:30001:32400"
+    devices:
+      - /dev/dri:/dev/dri # AMD GPU, for hardware transcoding
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/plex.png"
+      net.unraid.docker.webui: "https://plex.bakers.house/web"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.plex.rule: "Host(`plex.bakers.house`)"
+      traefik.http.routers.plex.entrypoints: "https"
+      traefik.http.services.plex.loadbalancer.server.port: "32400"
+
+      bakers.monitoring.logs: "true"
+
+  komga:
+    image: gotson/komga:1.27.1@sha256:9cf102f5fb78e2e020700c53eca757e4f4d4e347121b0a16380822760337cca9
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      KOMGA_LIBRARIES_SCAN_DIRECTORY_EXCLUSIONS: "#recycle,@eaDir"
+    volumes:
+      - ${APPDATA}/Komga:/config
+      - ${DATA}/media/comics:/books
+    networks:
+      - ingress
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/selfhosters/unRAID-CA-templates/master/templates/img/komga.png"
+      net.unraid.docker.webui: "https://komga.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.komga.rule: "Host(`komga.bakers.house`)"
+      traefik.http.routers.komga.entrypoints: "https"
+      traefik.http.services.komga.loadbalancer.server.port: "25600"
+
+      bakers.monitoring.logs: "true"
+
+  calibre-web-automated:
+    image: crocodilestick/calibre-web-automated:v4.0.6@sha256:c31a738b6d5ec6982c050063dd3f063b6943eb1051fc81144789f840d9093a8d
+    restart: unless-stopped
+    environment:
+      PUID: 1000 # TODO(hardening): run as 99:100
+      PGID: 1000
+      TZ: ${TZ}
+      HARDCOVER_TOKEN: ${CWA_HARDCOVER_TOKEN:?required} # Hardcover as a metadata provider
+    volumes:
+      - ${APPDATA}/cwa:/config
+      - ${DATA}/media/cwa-books-ingest:/cwa-book-ingest # emptied as books are imported
+      - ${DATA}/media/calibre:/calibre-library
+      - ${DATA}/media/calibre-plugins:/config/.config/calibre/plugins
+    networks:
+      - ingress
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/crocodilestick/Calibre-Web-Automated/main/README_images/cwa-logo-round-dark.png"
+      net.unraid.docker.webui: "https://books.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.calibre-web-automated.rule: "Host(`books.bakers.house`)"
+      traefik.http.routers.calibre-web-automated.entrypoints: "https"
+      traefik.http.services.calibre-web-automated.loadbalancer.server.port: "8083"
+
+      bakers.monitoring.logs: "true"
+
+  audiobookshelf:
+    image: advplyr/audiobookshelf:2.36.1@sha256:3528a93b6442ffe54bd46771bbbab7c97084e1101071586d9dc2254f30bb4358
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/audiobookshelf:/config
+      - ${APPDATA}/audiobookshelf/metadata:/metadata
+      - ${DATA}/media/audiobooks:/audiobooks
+    networks:
+      - ingress
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://github.com/advplyr/audiobookshelf/raw/master/client/static/Logo.png"
+      net.unraid.docker.webui: "https://audiobookshelf.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.audiobookshelf.rule: "Host(`audiobookshelf.bakers.house`)"
+      traefik.http.routers.audiobookshelf.entrypoints: "https"
+      traefik.http.services.audiobookshelf.loadbalancer.server.port: "80"
+
+      bakers.monitoring.logs: "true"
+
+  romm-db:
+    image: mariadb:13.0.2@sha256:d4fdec0510ad498e4f3127da30a99df3745bd6d5e611ae6ac5f76403d9284a8d
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${ROMM_DB_ROOT_PASS:?required}
+      MARIADB_DATABASE: romm
+      MARIADB_USER: romm-user
+      MARIADB_PASSWORD: ${ROMM_DB_PASS:?required}
+      MARIADB_AUTO_UPGRADE: "1" # upgrade the data files after a major version bump
+    volumes:
+      - ${APPDATA}/romm_db:/var/lib/mysql
+    networks:
+      - romm
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      start_interval: 10s
+    labels:
+      bakers.monitoring.logs: "true"
+
+  romm:
+    image: rommapp/romm:5.3.1@sha256:0d66b4ea152a237c7f24b95e87459f46d3c596a7c0b35a82f26bc971487278b3
+    restart: unless-stopped
+    depends_on:
+      romm-db:
+        condition: service_healthy
+        restart: true
+    environment:
+      TZ: ${TZ}
+      ROMM_BASE_URL: https://games.bakers.house
+      ROMM_AUTH_SECRET_KEY: ${ROMM_AUTH_SECRET_KEY:?required}
+      ROMM_SESSION_SECURE_COOKIE: "true"
+      ROMM_CORS_ALLOWED_ORIGINS: https://games.bakers.house
+      DB_HOST: romm-db
+      DB_NAME: romm
+      DB_USER: romm-user
+      DB_PASSWD: ${ROMM_DB_PASS:?required}
+      OIDC_ENABLED: "true"
+      OIDC_PROVIDER: authentik
+      OIDC_CLIENT_ID: ${ROMM_OIDC_CLIENT_ID:?required}
+      OIDC_CLIENT_SECRET: ${ROMM_OIDC_CLIENT_SECRET:?required}
+      OIDC_REDIRECT_URI: https://games.bakers.house/api/oauth/openid
+      OIDC_SERVER_APPLICATION_URL: https://auth.bakers.house/application/o/romm
+      # Metadata providers
+      IGDB_CLIENT_ID: ${ROMM_IGDB_CLIENT_ID:?required}
+      IGDB_CLIENT_SECRET: ${ROMM_IGDB_CLIENT_SECRET:?required}
+      SCREENSCRAPER_USER: ${ROMM_SCREENSCRAPER_USER:?required}
+      SCREENSCRAPER_PASSWORD: ${ROMM_SCREENSCRAPER_PASSWORD:?required}
+      RETROACHIEVEMENTS_API_KEY: ${ROMM_RETROACHIEVEMENTS_API_KEY:?required}
+      STEAMGRIDDB_API_KEY: ${ROMM_STEAMGRIDDB_API_KEY:?required}
+      HASHEOUS_API_ENABLED: "true"
+      HLTB_API_ENABLED: "true"
+    volumes:
+      - ${APPDATA}/romm:/romm/config
+      - ${APPDATA}/romm_resources:/romm/resources # covers and screenshots from the metadata providers
+      - ${APPDATA}/romm_redis:/redis-data # background task cache
+      - ${ROMS}:/romm/library
+      - ${DATA}/roms-assets:/romm/assets # uploaded saves and states
+    networks:
+      - ingress
+      - romm
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/rommapp/romm/master/.github/resources/isotipo.png"
+      net.unraid.docker.webui: "https://games.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.romm.rule: "Host(`games.bakers.house`)"
+      traefik.http.routers.romm.entrypoints: "https"
+      traefik.http.services.romm.loadbalancer.server.port: "8080"
+
+      bakers.monitoring.logs: "true"
+
+networks:
+  # The database is reachable only from RomM.
+  romm:
+    internal: true
+  ingress:
+    name: ingress
+    external: true
+  towernet:
+    # Seerr, Sonarr and Radarr (3_downloads) reach Plex here. Replace it with a
+    # shared network once nothing else needs towernet.
+    name: towernet
+    external: true

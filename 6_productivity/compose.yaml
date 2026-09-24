@@ -1,0 +1,177 @@
+name: productivity
+
+services:
+  actual:
+    image: actualbudget/actual-server:26.9.0@sha256:552beab3dec8c93d46b8b9245612d63c3f123b8a45063a474f53e229b17621d3
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      ACTUAL_OPENID_DISCOVERY_URL: https://auth.bakers.house/application/o/actual-budget/
+      ACTUAL_OPENID_CLIENT_ID: ${ACTUAL_OIDC_CLIENT_ID:?required}
+      ACTUAL_OPENID_CLIENT_SECRET: ${ACTUAL_OIDC_CLIENT_SECRET:?required}
+      ACTUAL_OPENID_SERVER_HOSTNAME: https://budgets.bakers.house
+      ACTUAL_USER_CREATION_MODE: login
+    volumes:
+      - ${APPDATA}/actual-budgets:/data
+    networks:
+      - ingress
+    healthcheck:
+      test: ["CMD-SHELL", "node scripts/health-check.js"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/actualbudget/actual/master/packages/desktop-client/public/maskable-512x512.png"
+      net.unraid.docker.webui: "https://budgets.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.actual-budget.rule: "Host(`budgets.bakers.house`)"
+      traefik.http.routers.actual-budget.entrypoints: "https"
+      traefik.http.services.actual-budget.loadbalancer.server.port: "5006"
+
+      bakers.monitoring.logs: "true"
+
+  # CalDAV and CardDAV clients can't do an OIDC login, so Radicale checks each
+  # username and password against Authentik's token endpoint instead. The
+  # password is an Authentik app password, one per device.
+  radicale:
+    image: tomsquest/docker-radicale:3.8.0.0@sha256:d311a35c91acb341c509fa8c692bd280720a6c3e73aa5d9a743453eeed4341c3
+    restart: unless-stopped
+    init: true
+    environment:
+      UID: 99
+      GID: 100
+      # Written into the image's /config/config at start; the format is
+      # RADICALE_CONFIG_<SECTION>_<KEY>.
+      RADICALE_CONFIG_AUTH_TYPE: oauth2
+      RADICALE_CONFIG_AUTH_OAUTH2_TOKEN_ENDPOINT: https://auth.bakers.house/application/o/token/
+      RADICALE_CONFIG_AUTH_OAUTH2_CLIENT_ID: ${RADICALE_OIDC_CLIENT_ID:?required}
+      RADICALE_CONFIG_AUTH_OAUTH2_CLIENT_SECRET: ${RADICALE_OIDC_CLIENT_SECRET:?required}
+      # Clients send credentials with every request; don't ask Authentik each time.
+      RADICALE_CONFIG_AUTH_CACHE_LOGINS: "true"
+      RADICALE_CONFIG_AUTH_CACHE_SUCCESSFUL_LOGINS_EXPIRY: 300
+      RADICALE_CONFIG_RIGHTS_TYPE: owner_only
+    volumes:
+      - ${APPDATA}/radicale:/data
+    networks:
+      - ingress
+    # The entrypoint changes the user's UID, takes ownership of /data, then
+    # drops to that user.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - KILL
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/Kozea/Radicale/master/radicale/web/internal_data/css/logo.svg"
+      net.unraid.docker.webui: "https://dav.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.radicale.rule: "Host(`dav.bakers.house`)"
+      traefik.http.routers.radicale.entrypoints: "https"
+      traefik.http.services.radicale.loadbalancer.server.port: "5232"
+
+      bakers.monitoring.logs: "true"
+
+  outline-db:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: outline
+      POSTGRES_USER: outline
+      POSTGRES_PASSWORD: ${OUTLINE_PG_PASS:?required}
+    volumes:
+      - ${APPDATA}/outline_db:/var/lib/postgresql
+    networks:
+      - outline
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      bakers.monitoring.logs: "true"
+
+  outline-redis:
+    image: redis:8.10.2-alpine@sha256:72cedd9603038893af961e90ac5e1a1a0d8377d5e338dbdad8fe284ea25de18f
+    restart: unless-stopped
+    volumes:
+      - ${APPDATA}/outline_redis:/data
+    networks:
+      - outline
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    labels:
+      bakers.monitoring.logs: "true"
+
+  outline:
+    image: outlinewiki/outline:1.10.1@sha256:832051f039b446c87aa23929cf92c00980c66aaa2d744d118c48c016ec816ad8
+    restart: unless-stopped
+    depends_on:
+      outline-db:
+        condition: service_healthy
+      outline-redis:
+        condition: service_healthy
+    environment:
+      URL: https://wiki.bakers.house
+      SECRET_KEY: ${OUTLINE_SECRET_KEY:?required}
+      UTILS_SECRET: ${OUTLINE_UTILS_SECRET:?required}
+      FORCE_HTTPS: "false" # Traefik terminates TLS
+      DATABASE_HOST: outline-db
+      DATABASE_NAME: outline
+      DATABASE_USER: outline
+      DATABASE_PASSWORD: ${OUTLINE_PG_PASS:?required}
+      PGSSLMODE: disable
+      REDIS_URL: redis://outline-redis:6379
+      FILE_STORAGE: local
+      FILE_STORAGE_UPLOAD_MAX_SIZE: 26214400 # 25 MiB
+      # Sign-in is through Authentik only.
+      OIDC_ISSUER_URL: https://auth.bakers.house/application/o/outline/
+      OIDC_CLIENT_ID: ${OUTLINE_OIDC_CLIENT_ID:?required}
+      OIDC_CLIENT_SECRET: ${OUTLINE_OIDC_CLIENT_SECRET:?required}
+      OIDC_LOGOUT_URI: https://auth.bakers.house/application/o/outline/end-session/
+      OIDC_USERNAME_CLAIM: preferred_username
+      OIDC_DISPLAY_NAME: Authentik
+      OIDC_SCOPES: openid profile email
+    volumes:
+      # Must be owned by the image's user, 1001:1001.
+      - ${APPDATA}/outline/data:/var/lib/outline/data
+    networks:
+      - ingress
+      - outline
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/outline/outline/main/public/images/icon-192.png"
+      net.unraid.docker.webui: "https://wiki.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.outline.rule: "Host(`wiki.bakers.house`)"
+      traefik.http.routers.outline.entrypoints: "https"
+      traefik.http.services.outline.loadbalancer.server.port: "3000"
+
+      bakers.monitoring.logs: "true"
+
+networks:
+  # The database and Redis are reachable only from Outline.
+  outline:
+    internal: true
+  ingress:
+    name: ingress
+    external: true
