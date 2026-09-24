@@ -19,7 +19,20 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Deliberate exceptions, as {"<stack>/<service>": {"<rule>", ...}}. Every entry
 # needs a comment saying why.
-EXCEPTIONS: dict[str, set[str]] = {}
+EXCEPTIONS: dict[str, set[str]] = {
+    # Published on ghcr.io only.
+    "3_downloads/shelfmark": {"docker-hub"},
+    # LazyLibrarian has no versioned releases, only commit builds that
+    # Renovate can't order; it follows the digest of `latest` instead.
+    "3_downloads/lazylibrarian": {"pinned-image"},
+}
+
+# Image prefixes allowed outside Docker Hub for every stack. Their updates wait
+# for approval on the Dependency Dashboard (renovate.json5).
+OTHER_REGISTRIES = {
+    # hotio's images, preferred where they exist, are published on ghcr.io only.
+    "ghcr.io/hotio/",
+}
 
 PINNED_IMAGE = re.compile(r"^(?P<name>[^@\s:]+(?::\d+)?/?[^@\s:]*):(?P<tag>[^@\s:]+)@sha256:[0-9a-f]{64}$")
 FLOATING_TAGS = {"latest", "stable", "edge", "nightly", "dev", "beta", "canary", "lts", "develop", "main", "master"}
@@ -89,7 +102,7 @@ def check_stack(stack: Path) -> list[str]:
                 fail(name, "pinned-image", f"tag {match['tag']!r} is floating; pin a version")
             # Renovate can only enforce minimumReleaseAge where the registry
             # reports a release timestamp, which today is Docker Hub alone.
-            if split_image(match["name"])[0] != "docker.io":
+            if split_image(match["name"])[0] != "docker.io" and not match["name"].startswith(tuple(OTHER_REGISTRIES)):
                 fail(
                     name,
                     "docker-hub",

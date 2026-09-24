@@ -33,6 +33,22 @@
       dependencyDashboardApproval: true,
     },
     {
+      // Tags look like release-4.0.20.3014; the release-<commit> tags beside
+      // them don't match and are ignored.
+      description: "hotio images",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/hotio/**"],
+      versioning: "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?$",
+    },
+    {
+      // Tags look like v0.11.0-ls272, where ls<n> is linuxserver's build.
+      description: "linuxserver images",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["linuxserver/**"],
+      matchCurrentValue: "/-ls\\d+$/",
+      versioning: "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$",
+    },
+    {
       description: "Batch linter and CI tooling into one weekly PR",
       matchManagers: ["mise", "github-actions", "custom.regex"],
       matchDepNames: ["!/^(maxlerebourg|packruler)\\//"],
