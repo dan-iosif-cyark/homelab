@@ -1,44 +1,48 @@
+name: infrastructure
+
 services:
   socket-proxy:
-    image: ghcr.io/tecnativa/docker-socket-proxy:v0.5.0@sha256:753044cb0851ce53ab44c2504872ff02ae37be9c294fa8abea3754074e61eab4
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
     restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       CONTAINERS: 1
       NETWORKS: 1
       SERVICES: 0
       TASKS: 0
       POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - docker_socket
 
   traefik:
     image: traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
+    environment:
+      DOCKER_HOST: tcp://socket-proxy:2375
+      DESEC_TOKEN: ${TRAEFIK_DESEC_TOKEN:?required}
     volumes:
       - ${APPDATA}/traefik:/etc/traefik
       - ${APPDATA}/traefik/logs:/var/log/traefik
       - ${APPDATA}/traefik/crowdsec/lapi-key:/etc/traefik/crowdsec/lapi-key
+    networks:
+      - ingress
+      - towernet
+      - frp
+      - docker_socket
+      - crowdsec
+    # The Unraid server's LAN address, not every interface.
+    ports:
+      - "192.168.1.192:80:80"
+      - "192.168.1.192:443:443"
     labels:
       # Unraid UI
       net.unraid.docker.icon: "https://raw.githubusercontent.com/ibracorp/unraid-templates/master/icons/traefik.png"
       net.unraid.docker.webui: "http://[IP]:[PORT:8080]/"
       net.unraid.docker.shell: "sh"
-    networks:
-      - towernet
-      - auth
-      - docker_socket
-      - crowdsec
-    environment:
-      DOCKER_HOST: tcp://socket-proxy:2375
-      DESEC_TOKEN: ${TRAEFIK_DESEC_TOKEN:?required}
 
   frpc:
-    image: ghcr.io/fatedier/frpc:v0.71.0@sha256:8dd029fa1f995629d6f31157f270633224f39492da079b099ce39dddaad3e191
+    image: fatedier/frpc:v0.71.0@sha256:99ece6a2b62cfc68731e0df289af804ff1c699911cfc47871856434f1d6d53ee
     restart: unless-stopped
     command:
       - "-c"
@@ -46,18 +50,15 @@ services:
     volumes:
       - ${APPDATA}/frpc/frpc.toml:/etc/frp/frpc.toml:ro
     networks:
-      towernet:
-        ipv4_address: 172.18.0.29
+      - frp
 
   crowdsec:
-    image: ghcr.io/crowdsecurity/crowdsec:v1.8.1@sha256:dd16bad0a1622fe1653a85e91678223d28f3bb5459d8c9604dcd0c397da06975
+    image: crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
     restart: unless-stopped
     environment:
       TZ: ${TZ}
       COLLECTIONS: >-
-        crowdsecurity/traefik
-        crowdsecurity/appsec-virtual-patching
-        crowdsecurity/appsec-generic-rules
+        crowdsecurity/traefik crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules
     volumes:
       - ${APPDATA}/crowdsec/config:/etc/crowdsec
       - ${APPDATA}/crowdsec/data:/var/lib/crowdsec/data
@@ -69,14 +70,21 @@ services:
       bakers.monitoring.logs: "true"
 
 networks:
-  crowdsec:
+  crowdsec: # frpc hands Traefik the traffic arriving at the VPS, with PROXY protocol.
+
+  # Traefik trusts PROXY headers from this subnet (traefik.yml), so nothing
+  # else may join it.
+  frp:
+    ipam:
+      config:
+        - subnet: 10.200.200.0/29
   docker_socket:
     name: docker_socket
     external: true
-  towernet:
-    # TODO: replace with "ingress" once remaining containers are migrated
-    name: towernet
+  ingress:
+    name: ingress
     external: true
-  auth:
-    name: auth
+  towernet:
+    # Legacy; Traefik leaves it once the last container has moved to ingress.
+    name: towernet
     external: true

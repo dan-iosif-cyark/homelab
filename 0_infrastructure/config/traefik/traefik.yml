@@ -8,7 +8,7 @@ entryPoints:
     address: :80
     proxyProtocol:
       trustedIPs:
-        - "172.18.0.29/32"
+        - "10.200.200.0/29" # the frp network: only frpc and Traefik
     http:
       aliasHeadersStrategy: delete
       redirections:
@@ -21,7 +21,7 @@ entryPoints:
     address: :443
     proxyProtocol:
       trustedIPs:
-        - "172.18.0.29/32"
+        - "10.200.200.0/29" # the frp network: only frpc and Traefik
     http:
       aliasHeadersStrategy: delete
       tls:
@@ -44,6 +44,8 @@ providers:
 
   docker:
     watch: true
+    # Services on ingress set the traefik.docker.network label until every
+    # container has left towernet; then this becomes ingress.
     network: towernet
     defaultRule: "Host(`{{ lower (trimPrefix `/` .Name )}}.bakers.house`)"
     exposedByDefault: false

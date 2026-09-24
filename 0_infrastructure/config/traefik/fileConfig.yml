@@ -34,10 +34,11 @@ http:
           - X-authentik-meta-provider
           - X-authentik-meta-app
           - X-authentik-meta-version
-    # Only Allow Local networks
+    # Only Allow Local networks. The name predates Traefik's rename of
+    # ipWhiteList to ipAllowList; containers still reference it by this name.
     local-ipwhitelist:
-      ipWhiteList:
-        sourceRange: 
+      ipAllowList:
+        sourceRange:
           - 127.0.0.1/32 # localhost
           - 192.168.1.0/24 # LAN Subnet
     securityHeaders:

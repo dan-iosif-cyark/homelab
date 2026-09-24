@@ -4,9 +4,6 @@ auth.method = "token"
 auth.tokenSource.type = "file"
 auth.tokenSource.file.path = "/etc/frp-token"
 
-allowPorts = [
-  { single = 80 },
-  { single = 443 }
-]
+allowPorts = [{ single = 80 }, { single = 443 }]
 
 transport.tls.force = true

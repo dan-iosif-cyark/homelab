@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zavoloklom/docker-compose-linter/refs/heads/main/schemas/linter-config.schema.json
+#
+# Every rule is an error (2) or off (0), so nothing is left as a warning that
+# CI would let through.
+rules:
+  no-build-and-image: 2
+  no-duplicate-container-names: 2
+  no-duplicate-exported-ports: 2
+  no-quotes-in-volumes: 2
+  no-unbound-port-interfaces: 2
+  no-version-field: 2
+  require-quotes-in-ports:
+    - 2
+    - quoteType: double # match prettier
+  service-dependencies-alphabetical-order: 2
+  service-image-require-explicit-tag: 2
+  service-ports-alphabetical-order: 2
+  top-level-properties-order: 2
+
+  # Services are ordered by dependency (socket-proxy before traefik), not name.
+  services-alphabetical-order: 0
+  # compose-policy.py also checks the name matches the stack folder.
+  require-project-name-field: 2
+
+  # The canonical key order for a service. Keys not listed here sort
+  # alphabetically after everything else, so add new keys to a group instead.
+  # The group names are dclint's own; the contents and order are ours.
+  service-keys-order:
+    - 2
+    - groupOrder:
+        - Core Definitions
+        - Runtime Behavior
+        - Environment Configuration
+        - Data Management and Configuration
+        - Networking
+        - Security and Execution Context
+        - Operational Metadata
+        - Service Dependencies
+        - Other
+      groups:
+        Core Definitions:
+          - image
+          - build
+          - container_name
+          - hostname
+        Runtime Behavior:
+          - restart
+          - depends_on
+          - init
+          - stop_signal
+          - stop_grace_period
+          - user
+          - working_dir
+          - entrypoint
+          - command
+        Environment Configuration:
+          - env_file # before environment, which overrides it
+          - environment
+          - secrets
+          - configs
+        Data Management and Configuration:
+          - volumes
+          - volumes_from
+          - tmpfs
+        Networking:
+          - network_mode
+          - networks
+          - ports
+          - expose
+          - extra_hosts
+          - dns
+        Security and Execution Context:
+          - read_only
+          - privileged
+          - cap_drop
+          - cap_add
+          - security_opt
+          - devices
+          - group_add
+          - isolation
+        Operational Metadata:
+          - healthcheck
+          - deploy
+          - mem_limit
+          - cpus
+          - shm_size
+          - ulimits
+          - logging
+          - labels
+        Service Dependencies: []
+        Other: []

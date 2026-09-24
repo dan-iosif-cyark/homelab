@@ -1,0 +1,84 @@
+amends "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Builtins.pkl"
+
+local stacks = List("*/compose.yaml", "*/.env.template")
+
+local linters = new Mapping<String, Step | Group> {
+  // Hygiene
+  ["trailing-whitespace"] = Builtins.trailing_whitespace
+  ["newlines"] = Builtins.newlines
+  ["merge-conflicts"] = Builtins.check_merge_conflict
+  ["large-files"] = Builtins.check_added_large_files
+  ["private-keys"] = Builtins.detect_private_key
+
+  // Compose: key order and structure first, then formatting on top of it
+  ["dclint"] = Builtins.dclint
+  ["compose-policy"] {
+    glob = stacks
+    check = "scripts/compose-policy.py {{files}}"
+  }
+  ["compose-config"] {
+    glob = "*/compose.yaml"
+    check = "scripts/compose-config.sh {{files}}"
+  }
+  ["alloy"] {
+    glob = "**/*.alloy"
+    check = "for f in {{files}}; do alloy fmt \"$f\" | diff -u \"$f\" - || exit 1; done"
+    fix = "for f in {{files}}; do alloy fmt -w \"$f\" || exit 1; done"
+  }
+
+  // Formats
+  ["prettier"] = (Builtins.prettier) {
+    glob = List("**/*.yaml", "**/*.yml", "**/*.json", "**/*.json5", "**/*.md")
+    depends = "dclint"
+  }
+  ["yamllint"] = (Builtins.yamllint) {
+    depends = "prettier"
+  }
+  ["taplo"] = (Builtins.taplo_format) {
+    exclude = List("mise.toml", "mise.lock")
+  }
+  ["mise"] = Builtins.mise
+  ["pkl"] = Builtins.pkl_format
+  ["renovate"] {
+    glob = "renovate.json5"
+    check = "check-jsonschema --builtin-schema vendor.renovate {{files}}"
+  }
+
+  // Scripts
+  ["shellcheck"] = Builtins.shellcheck
+  ["shfmt"] = Builtins.shfmt
+  ["ruff"] = Builtins.ruff
+  ["ruff-format"] = Builtins.ruff_format
+
+  // GitHub Actions
+  ["actionlint"] = Builtins.actionlint
+  ["zizmor"] = Builtins.zizmor
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps {
+      ...linters
+      ["gitleaks"] {
+        check = "gitleaks git --pre-commit --staged --redact --no-banner"
+      }
+    }
+  }
+  ["check"] {
+    steps {
+      ...linters
+      // Scans the full history, so CI needs a full clone.
+      ["gitleaks"] {
+        check = "gitleaks git --redact --no-banner"
+      }
+    }
+  }
+  ["fix"] {
+    fix = true
+    steps = linters
+  }
+}

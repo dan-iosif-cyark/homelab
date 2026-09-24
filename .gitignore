@@ -2,3 +2,5 @@
 .env.*
 !.env.template
 *.secret
+# Unraid exports dropped here for conversion; they contain secrets.
+_import/

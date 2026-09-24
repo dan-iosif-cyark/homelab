@@ -3,47 +3,47 @@
 //
 
 discovery.docker "containers" {
-  host = "tcp://socket-proxy:2375"
+	host = "tcp://socket-proxy:2375"
 }
 
 discovery.relabel "containers" {
-  targets = discovery.docker.containers.targets
+	targets = discovery.docker.containers.targets
 
-  // Only collect containers explicitly opted into logging.
-  rule {
-    source_labels = ["__meta_docker_container_label_bakers_monitoring_logs"]
-    regex         = "true"
-    action        = "keep"
-  }
+	// Only collect containers explicitly opted into logging.
+	rule {
+		source_labels = ["__meta_docker_container_label_bakers_monitoring_logs"]
+		regex         = "true"
+		action        = "keep"
+	}
 
-  // Record the Compose project.
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
-    target_label  = "compose_project"
-  }
+	// Record the Compose project.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
 
-  // Record the Compose service name.
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    target_label  = "compose_service"
-  }
+	// Record the Compose service name.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "compose_service"
+	}
 }
 
 loki.source.docker "containers" {
-  host    = "tcp://socket-proxy:2375"
-  targets = discovery.relabel.containers.output
+	host    = "tcp://socket-proxy:2375"
+	targets = discovery.relabel.containers.output
 
-  labels = {
-    host = "unraid",
-  }
+	labels = {
+		host = "unraid",
+	}
 
-  forward_to = [loki.process.containers.receiver]
+	forward_to = [loki.process.containers.receiver]
 }
 
 loki.process "containers" {
-  stage.docker {}
+	stage.docker { }
 
-  forward_to = [loki.write.local.receiver]
+	forward_to = [loki.write.local.receiver]
 }
 
 //
@@ -51,41 +51,41 @@ loki.process "containers" {
 //
 
 local.file_match "traefik" {
-  path_targets = [{
-    "__path__" = "/logs/traefik/access.json",
-    "job"      = "traefik",
-  }]
+	path_targets = [{
+		"__path__" = "/logs/traefik/access.json",
+		"job"      = "traefik",
+	}]
 }
 
 loki.source.file "traefik" {
-  targets    = local.file_match.traefik.targets
-  forward_to = [loki.process.traefik.receiver]
+	targets    = local.file_match.traefik.targets
+	forward_to = [loki.process.traefik.receiver]
 }
 
 loki.process "traefik" {
-  stage.json {
-    expressions = {
-      client_ip = "ClientHost",
-      host      = "RequestHost",
-      method    = "RequestMethod",
-      path      = "RequestPath",
-      status    = "DownstreamStatus",
-      router    = "RouterName",
-    }
-  }
+	stage.json {
+		expressions = {
+			client_ip = "ClientHost",
+			host      = "RequestHost",
+			method    = "RequestMethod",
+			path      = "RequestPath",
+			status    = "DownstreamStatus",
+			router    = "RouterName",
+		}
+	}
 
-  stage.labels {
-    values = {
-      host   = "",
-      method = "",
-    }
-  }
+	stage.labels {
+		values = {
+			host   = "",
+			method = "",
+		}
+	}
 
-  forward_to = [loki.write.local.receiver]
+	forward_to = [loki.write.local.receiver]
 }
 
 loki.write "local" {
-  endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
-  }
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
 }
