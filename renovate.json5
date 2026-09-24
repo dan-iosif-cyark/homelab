@@ -3,6 +3,8 @@
   // Includes config:recommended, digest pinning for Docker images and GitHub
   // Actions, and config migration PRs.
   extends: ["config:best-practices"],
+  // This repository is a fork, which Renovate skips unless told otherwise.
+  forkProcessing: "enabled",
   timezone: "Europe/London",
   labels: ["dependencies"],
 
