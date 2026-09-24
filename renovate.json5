@@ -51,13 +51,13 @@
     {
       description: "Batch linter and CI tooling into one weekly PR",
       matchManagers: ["mise", "github-actions", "custom.regex"],
-      matchDepNames: ["!/^(maxlerebourg|packruler)\\//"],
+      matchDepNames: ["!/^maxlerebourg\\//"],
       groupName: "tooling",
       schedule: ["* 0-5 * * 1"],
     },
     {
       description: "Traefik plugins are part of the Traefik deployment, not tooling",
-      matchDepNames: ["/^(maxlerebourg|packruler)\\//"],
+      matchDepNames: ["/^maxlerebourg\\//"],
       addLabels: ["traefik"],
     },
   ],

@@ -27,7 +27,6 @@ services:
       - ${APPDATA}/traefik/crowdsec/lapi-key:/etc/traefik/crowdsec/lapi-key
     networks:
       - ingress
-      - towernet
       - frp
       - docker_socket
       - crowdsec
@@ -83,8 +82,4 @@ networks:
     external: true
   ingress:
     name: ingress
-    external: true
-  towernet:
-    # Legacy; Traefik leaves it once the last container has moved to ingress.
-    name: towernet
     external: true

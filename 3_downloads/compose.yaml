@@ -13,12 +13,9 @@ services:
       PGID: 0
       UMASK: "002"
       TZ: ${TZ}
-      TP_HOTIO: "true"
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/qbittorrent:/config
       - ${DATA}/torrents:/data/torrents
-      - ${DATA}/lab/theme.park/98-themepark-vuetorrent:/etc/cont-init.d/98-themepark
     networks:
       - downloads
     # The peer port must match qBittorrent's "Port used for incoming
@@ -40,12 +37,9 @@ services:
       PGID: 0
       UMASK: "002"
       TZ: ${TZ}
-      TP_HOTIO: "true"
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/sabnzbd:/config
       - ${DATA}/usenet:/data/usenet
-      - ${DATA}/lab/theme.park/98-themepark-sabnzbd:/etc/cont-init.d/98-themepark
     networks:
       - downloads
     ports:
@@ -63,11 +57,8 @@ services:
       PGID: 100
       UMASK: "002"
       TZ: ${TZ}
-      TP_HOTIO: "true"
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/prowlarr:/config
-      - ${DATA}/lab/theme.park/98-themepark-prowlarr:/etc/cont-init.d/98-themepark
     networks:
       - downloads
     ports:
@@ -85,15 +76,12 @@ services:
       PGID: 0
       UMASK: "002"
       TZ: ${TZ}
-      TP_HOTIO: "true"
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/sonarr:/config
       - ${DATA}:/data
-      - ${DATA}/lab/theme.park/98-themepark-sonarr:/etc/cont-init.d/98-themepark
     networks:
       - downloads
-      - towernet
+      - plex
     ports:
       - "192.168.1.192:20004:8989"
     labels:
@@ -109,15 +97,12 @@ services:
       PGID: 0
       UMASK: "002"
       TZ: ${TZ}
-      TP_HOTIO: "true"
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/radarr:/config
       - ${DATA}:/data
-      - ${DATA}/lab/theme.park/98-themepark-radarr:/etc/cont-init.d/98-themepark
     networks:
       - downloads
-      - towernet
+      - plex
     ports:
       - "192.168.1.192:20003:7878"
     labels:
@@ -134,8 +119,6 @@ services:
       PGID: 100
       UMASK: "022"
       TZ: ${TZ}
-      DOCKER_MODS: ghcr.io/themepark-dev/theme.park:mylar3
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/mylar3:/config
       - ${DATA}/media/comics:/comics
@@ -238,7 +221,7 @@ services:
     networks:
       - ingress
       - downloads
-      - towernet
+      - plex
     labels:
       # Unraid
       net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/seerr.png"
@@ -260,8 +243,7 @@ networks:
   ingress:
     name: ingress
     external: true
-  towernet:
-    # Seerr, Sonarr and Radarr talk to Plex, which is still an Unraid App on
-    # towernet. Drop this once 4_media is migrated.
-    name: towernet
+  plex:
+    # Shared with Plex (4_media), which Seerr, Sonarr and Radarr talk to.
+    name: plex
     external: true

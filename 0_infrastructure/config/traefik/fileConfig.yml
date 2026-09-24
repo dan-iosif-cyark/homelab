@@ -13,11 +13,6 @@ http:
           crowdsecAppsecFailureBlock: true
           crowdsecAppsecUnreachableBlock: true
           logLevel: INFO
-    overseerr-dark:
-      plugin:
-        themepark:
-          app: overseerr
-          theme: dark
     authentik:
       forwardauth:
         address: http://authentik:9000/outpost.goauthentik.io/auth/traefik

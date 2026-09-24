@@ -95,6 +95,12 @@ def check_stack(stack: Path) -> list[str]:
     if compose.get("name") != project:
         fail(None, "project-name", f"set the project name to {project!r}, the folder name without its number")
 
+    # towernet is the network the Unraid Apps shared; stacks use ingress and
+    # networks of their own instead.
+    for key, network in (compose.get("networks") or {}).items():
+        if "towernet" in (key, (network or {}).get("name")):
+            fail(None, "towernet", "don't join towernet; use ingress or a network of the stack's own")
+
     for name, service in (compose.get("services") or {}).items():
         image = str(service.get("image", ""))
         match = PINNED_IMAGE.match(image)

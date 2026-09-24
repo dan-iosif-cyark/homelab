@@ -44,9 +44,7 @@ providers:
 
   docker:
     watch: true
-    # Services on ingress set the traefik.docker.network label until every
-    # container has left towernet; then this becomes ingress.
-    network: towernet
+    network: ingress
     defaultRule: "Host(`{{ lower (trimPrefix `/` .Name )}}.bakers.house`)"
     exposedByDefault: false
 
@@ -79,9 +77,6 @@ certificatesResolvers:
 
 experimental:
   plugins:
-    themepark:
-      moduleName: "github.com/packruler/traefik-themepark"
-      version: "v1.4.0"
     bouncer:
       moduleName: "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
       version: "v1.7.0"

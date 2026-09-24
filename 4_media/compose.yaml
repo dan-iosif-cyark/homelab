@@ -11,16 +11,13 @@ services:
       PGID: 100
       UMASK: "002"
       TZ: ${TZ}
-      TP_HOTIO: "true"
-      TP_THEME: dark
     volumes:
       - ${APPDATA}/plex:/config
       - ${DATA}/transcode:/transcode
       - ${DATA}/media:/data/media
-      - ${DATA}/lab/theme.park/98-themepark-plex:/etc/cont-init.d/98-themepark
     networks:
       - ingress
-      - towernet
+      - plex
     ports:
       - "192.168.1.192:30001:32400"
     devices:
@@ -53,12 +50,12 @@ services:
     labels:
       # Unraid
       net.unraid.docker.icon: "https://raw.githubusercontent.com/selfhosters/unRAID-CA-templates/master/templates/img/komga.png"
-      net.unraid.docker.webui: "https://komga.bakers.house"
+      net.unraid.docker.webui: "https://comics.bakers.house"
 
       # Traefik
       traefik.enable: "true"
       traefik.docker.network: "ingress"
-      traefik.http.routers.komga.rule: "Host(`komga.bakers.house`)"
+      traefik.http.routers.komga.rule: "Host(`comics.bakers.house`)"
       traefik.http.routers.komga.entrypoints: "https"
       traefik.http.services.komga.loadbalancer.server.port: "25600"
 
@@ -107,12 +104,12 @@ services:
     labels:
       # Unraid
       net.unraid.docker.icon: "https://github.com/advplyr/audiobookshelf/raw/master/client/static/Logo.png"
-      net.unraid.docker.webui: "https://audiobookshelf.bakers.house"
+      net.unraid.docker.webui: "https://audiobooks.bakers.house"
 
       # Traefik
       traefik.enable: "true"
       traefik.docker.network: "ingress"
-      traefik.http.routers.audiobookshelf.rule: "Host(`audiobookshelf.bakers.house`)"
+      traefik.http.routers.audiobookshelf.rule: "Host(`audiobooks.bakers.house`)"
       traefik.http.routers.audiobookshelf.entrypoints: "https"
       traefik.http.services.audiobookshelf.loadbalancer.server.port: "80"
 
@@ -203,8 +200,7 @@ networks:
   ingress:
     name: ingress
     external: true
-  towernet:
-    # Seerr, Sonarr and Radarr (3_downloads) reach Plex here. Replace it with a
-    # shared network once nothing else needs towernet.
-    name: towernet
+  plex:
+    # Shared with 3_downloads, whose Seerr, Sonarr and Radarr talk to Plex.
+    name: plex
     external: true

@@ -30,26 +30,26 @@ that forwards public traffic to `frpc` in `0_infrastructure`.
 
 ## Networks
 
-| Network         | Created by                   | Members                                             |
-| --------------- | ---------------------------- | --------------------------------------------------- |
-| `ingress`       | hand (shared)                | Traefik and every service it routes to              |
-| `docker_socket` | hand (shared)                | socket-proxy and its clients (Traefik, Alloy)       |
-| `frp`           | `0_infrastructure`           | frpc and Traefik; Traefik trusts its PROXY headers  |
-| `<stack>_<net>` | its stack                    | a stack's private networks, e.g. a database network |
-| `towernet`      | hand (legacy, being retired) | Unraid Apps containers not yet migrated             |
+| Network         | Created by         | Members                                             |
+| --------------- | ------------------ | --------------------------------------------------- |
+| `ingress`       | hand (shared)      | Traefik and every service it routes to              |
+| `docker_socket` | hand (shared)      | socket-proxy and its clients (Traefik, Alloy)       |
+| `plex`          | hand (shared)      | Plex, and Seerr, Sonarr and Radarr, which call it   |
+| `frp`           | `0_infrastructure` | frpc and Traefik; Traefik trusts its PROXY headers  |
+| `<stack>_<net>` | its stack          | a stack's private networks, e.g. a database network |
 
 The shared networks must exist before the stacks start:
 
 ```sh
 docker network create ingress
 docker network create docker_socket
+docker network create --internal plex
 ```
 
 A service routed through Traefik joins `ingress` and sets the
 `traefik.docker.network: "ingress"` label. Databases and other backends stay
-on an `internal: true` network of their own stack. When the last container
-has left `towernet`, Traefik leaves it too and its provider default in
-`traefik.yml` becomes `ingress`.
+on an `internal: true` network of their own stack. `towernet`, the network
+the Unraid Apps shared, is not used by any stack.
 
 ## Conventions
 
