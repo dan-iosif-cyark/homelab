@@ -86,5 +86,14 @@
       datasourceTemplate: "github-releases",
       extractVersionTemplate: "^v(?<version>.+)$",
     },
+    {
+      customType: "regex",
+      description: "Images the scripts run with docker run",
+      managerFilePatterns: ["/(^|/)scripts/[^/]+\\.sh$/"],
+      matchStrings: [
+        "_image=(?<depName>[a-z0-9./_-]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]{64})",
+      ],
+      datasourceTemplate: "docker",
+    },
   ],
 }

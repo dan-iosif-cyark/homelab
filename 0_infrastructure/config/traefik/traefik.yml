@@ -39,7 +39,7 @@ providers:
   providersThrottleDuration: 2s
 
   file:
-    filename: /etc/traefik/fileConfig.yml
+    filename: /etc/traefik/config/fileConfig.yml
     watch: true
 
   docker:

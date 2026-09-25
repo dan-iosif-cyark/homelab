@@ -18,11 +18,15 @@ services:
   traefik:
     image: traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
     restart: unless-stopped
+    # The config comes from the repo; appdata keeps acme.json and the logs.
+    command:
+      - --configfile=/etc/traefik/config/traefik.yml
     environment:
       DOCKER_HOST: tcp://socket-proxy:2375
       DESEC_TOKEN: ${TRAEFIK_DESEC_TOKEN:?required}
     volumes:
       - ${APPDATA}/traefik:/etc/traefik
+      - ./config/traefik:/etc/traefik/config:ro
       - ${APPDATA}/traefik/logs:/var/log/traefik
       - ${APPDATA}/traefik/crowdsec/lapi-key:/etc/traefik/crowdsec/lapi-key
     networks:
@@ -61,7 +65,9 @@ services:
     volumes:
       - ${APPDATA}/crowdsec/config:/etc/crowdsec
       - ${APPDATA}/crowdsec/data:/var/lib/crowdsec/data
-      - ${APPDATA}/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      # Single files, so deploy.sh restarts CrowdSec when they change.
+      - ./config/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./config/crowdsec/appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml:ro
       - ${APPDATA}/traefik/logs:/var/log/traefik:ro
     networks:
       - crowdsec

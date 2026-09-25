@@ -4,3 +4,5 @@
 *.secret
 # Unraid exports dropped here for conversion; they contain secrets.
 _import/
+# Written by Compose Manager Plus into its project folders, never here.
+compose.override.yaml
