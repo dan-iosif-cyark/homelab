@@ -79,6 +79,31 @@ Most of these are enforced by `mise run lint`, locally and in CI.
   `env_file` → `environment` → `volumes` → `networks` → `ports` → security
   → `healthcheck` → `labels`
 
+## Deploying
+
+The Unraid server keeps a clone of this repository at
+`/mnt/user/appdata/homelab`. Compose Manager Plus still runs every stack: each
+of its project folders (`/boot/config/plugins/compose.manager/projects/<stack>`)
+holds an `indirect` file pointing at the stack's folder in the clone, and keeps
+its own `project_name`, `autostart` and any `compose.override.yaml`. Stacks
+mount their `config/` straight from the clone.
+
+```sh
+scripts/deploy.sh link 2_identity   # once per stack: point the plugin here
+scripts/deploy.sh up                # pull main, deploy every linked autostart stack
+scripts/deploy.sh up 2_identity     # or only the stacks named
+scripts/deploy.sh up --no-pull      # deploy what is checked out
+```
+
+`up` renders each `.env` from its `.env.template` with `op inject`, using the
+1Password service account token in `/boot/config/homelab/op-token` (root only).
+Nothing changes unless every stack renders. Then each stack gets
+`docker compose up -d --remove-orphans`, in folder order, and a service whose
+`config/<service>/` changed in the pull is restarted, since single-file mounts
+keep pointing at the old file.
+
+Git runs from the `alpine/git` image when the server has no `git`.
+
 ## Tooling
 
 Tools are pinned in `mise.toml` (checksums in `mise.lock`), and hooks run
