@@ -8,7 +8,7 @@ entryPoints:
     address: :80
     proxyProtocol:
       trustedIPs:
-        - "172.18.0.29/32"
+        - "10.200.200.0/29" # the frp network: only frpc and Traefik
     http:
       aliasHeadersStrategy: delete
       redirections:
@@ -21,7 +21,7 @@ entryPoints:
     address: :443
     proxyProtocol:
       trustedIPs:
-        - "172.18.0.29/32"
+        - "10.200.200.0/29" # the frp network: only frpc and Traefik
     http:
       aliasHeadersStrategy: delete
       tls:
@@ -44,7 +44,7 @@ providers:
 
   docker:
     watch: true
-    network: towernet
+    network: ingress
     defaultRule: "Host(`{{ lower (trimPrefix `/` .Name )}}.bakers.house`)"
     exposedByDefault: false
 
@@ -77,9 +77,6 @@ certificatesResolvers:
 
 experimental:
   plugins:
-    themepark:
-      moduleName: "github.com/packruler/traefik-themepark"
-      version: "v1.4.0"
     bouncer:
       moduleName: "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
       version: "v1.7.0"

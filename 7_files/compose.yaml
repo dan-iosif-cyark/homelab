@@ -1,0 +1,210 @@
+name: files
+
+services:
+  seafile-db:
+    image: mariadb:10.11.19@sha256:7f22313fc130a377a44999965bcb0a08dd5b21e8502824c1b864f792f9bc66ab
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${SEAFILE_DB_ROOT_PASS:?required}
+      MARIADB_AUTO_UPGRADE: "1" # upgrade the data files after a version bump
+      MYSQL_LOG_CONSOLE: "true"
+    volumes:
+      - ${APPDATA}/seafile-mysql/db:/var/lib/mysql
+    networks:
+      - seafile
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--connect",
+          "--mariadbupgrade",
+          "--innodb_initialized",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    labels:
+      bakers.monitoring.logs: "true"
+
+  # A cache only: nothing is written to disk.
+  seafile-redis:
+    image: redis:8.10.2-alpine@sha256:72cedd9603038893af961e90ac5e1a1a0d8377d5e338dbdad8fe284ea25de18f
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "$$REDISCLI_AUTH" --save "" --appendonly no
+    environment:
+      REDISCLI_AUTH: ${SEAFILE_REDIS_PASS:?required} # also read by redis-cli, for the healthcheck
+    networks:
+      - seafile
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    labels:
+      bakers.monitoring.logs: "true"
+
+  # Full-text search, in place of Elasticsearch. Seafile reaches it through the
+  # [SEASEARCH] section of seafevents.conf, in appdata.
+  seasearch:
+    # Published for amd64 only, so this is a single-platform digest.
+    image: seafileltd/seasearch:1.0.7@sha256:513a53bbc2fd12890b9d61689befe5a2b58516418feb496d6d697cc30f438d33
+    restart: unless-stopped
+    environment:
+      # Create the admin account on the first start only.
+      SS_FIRST_ADMIN_USER: seasearch
+      SS_FIRST_ADMIN_PASSWORD: ${SEASEARCH_ADMIN_PASS:?required}
+      SS_STORAGE_TYPE: disk
+      SS_MAX_OBJ_CACHE_SIZE: 10GB
+      SS_LOG_TO_STDOUT: "true"
+      SS_LOG_DIR: /opt/seasearch/data/log
+      SS_LOG_LEVEL: info
+    volumes:
+      - ${APPDATA}/seasearch-data:/opt/seasearch/data
+    networks:
+      - seafile
+    labels:
+      bakers.monitoring.logs: "true"
+
+  seafile:
+    image: seafileltd/seafile-pro-mc:13.0.28@sha256:5796f38804942a3adf6fb08d078dc9e0707146d24dc2f546e236aaa36a626272
+    restart: unless-stopped
+    depends_on:
+      seafile-db:
+        condition: service_healthy
+      seafile-redis:
+        condition: service_healthy
+    # TODO(hardening): set NON_ROOT to "true" after chowning the data to 8000:8000.
+    environment:
+      TIME_ZONE: ${TZ}
+      SEAFILE_SERVER_HOSTNAME: files.bakers.house
+      SEAFILE_SERVER_PROTOCOL: https
+      JWT_PRIVATE_KEY: ${SEAFILE_JWT_PRIVATE_KEY:?required}
+      SEAFILE_LOG_TO_STDOUT: "true"
+      SEAFILE_MYSQL_DB_HOST: seafile-db
+      SEAFILE_MYSQL_DB_PORT: 3306
+      SEAFILE_MYSQL_DB_USER: seafile
+      SEAFILE_MYSQL_DB_PASSWORD: ${SEAFILE_DB_PASS:?required}
+      SEAFILE_MYSQL_DB_CCNET_DB_NAME: ccnet_db
+      SEAFILE_MYSQL_DB_SEAFILE_DB_NAME: seafile_db
+      SEAFILE_MYSQL_DB_SEAHUB_DB_NAME: seahub_db
+      CACHE_PROVIDER: redis
+      REDIS_HOST: seafile-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${SEAFILE_REDIS_PASS:?required}
+      ENABLE_GO_FILESERVER: "true"
+      ENABLE_SEADOC: "true"
+      SEADOC_SERVER_URL: https://files.bakers.house/sdoc-server
+      ENABLE_NOTIFICATION_SERVER: "true"
+      NOTIFICATION_SERVER_URL: https://files.bakers.house/notification
+      INNER_NOTIFICATION_SERVER_URL: http://seafile-notification:8083
+      ENABLE_SEAFILE_AI: "false"
+    volumes:
+      - ${APPDATA}/seafile-data:/shared
+    networks:
+      - ingress
+      - seafile
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/selfhosters/unRAID-CA-templates/master/templates/img/seafile.png"
+      net.unraid.docker.webui: "https://files.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.seafile.rule: "Host(`files.bakers.house`)"
+      traefik.http.routers.seafile.entrypoints: "https"
+      traefik.http.services.seafile.loadbalancer.server.port: "80"
+
+      bakers.monitoring.logs: "true"
+
+  # Pushes live file and library changes to clients over a websocket.
+  seafile-notification:
+    image: seafileltd/notification-server:13.0.21@sha256:1cac4101d0f4527ad08c00b5452ceb05d790db95d6c8ab6bbace82429c1e5217
+    restart: unless-stopped
+    depends_on:
+      seafile:
+        condition: service_healthy
+      seafile-db:
+        condition: service_healthy
+    environment:
+      JWT_PRIVATE_KEY: ${SEAFILE_JWT_PRIVATE_KEY:?required}
+      SEAFILE_LOG_TO_STDOUT: "true"
+      NOTIFICATION_SERVER_LOG_LEVEL: info
+      SEAFILE_MYSQL_DB_HOST: seafile-db
+      SEAFILE_MYSQL_DB_PORT: 3306
+      SEAFILE_MYSQL_DB_USER: seafile
+      SEAFILE_MYSQL_DB_PASSWORD: ${SEAFILE_DB_PASS:?required}
+      SEAFILE_MYSQL_DB_CCNET_DB_NAME: ccnet_db
+      SEAFILE_MYSQL_DB_SEAFILE_DB_NAME: seafile_db
+    volumes:
+      - ${APPDATA}/seafile-data/seafile/logs:/shared/seafile/logs
+    networks:
+      - ingress
+      - seafile
+    labels:
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.seafile-notification.rule: "Host(`files.bakers.house`) && PathPrefix(`/notification`)"
+      traefik.http.routers.seafile-notification.entrypoints: "https"
+      traefik.http.routers.seafile-notification.middlewares: "seafile-notification-strip"
+      traefik.http.middlewares.seafile-notification-strip.stripprefix.prefixes: "/notification"
+      traefik.http.services.seafile-notification.loadbalancer.server.port: "8083"
+
+      bakers.monitoring.logs: "true"
+
+  # The editor for SeaDoc (.sdoc) documents.
+  seadoc:
+    image: seafileltd/sdoc-server:2.0.9@sha256:5b1bf5a8bfdb8bc5db957e7faee2220111fd6eff00795eaaf172e2f80bb999a5
+    restart: unless-stopped
+    depends_on:
+      seafile-db:
+        condition: service_healthy
+    environment:
+      TIME_ZONE: ${TZ}
+      JWT_PRIVATE_KEY: ${SEAFILE_JWT_PRIVATE_KEY:?required}
+      SEAHUB_SERVICE_URL: http://seafile
+      DB_HOST: seafile-db
+      DB_PORT: 3306
+      DB_USER: seafile
+      DB_PASSWORD: ${SEAFILE_DB_PASS:?required}
+      DB_NAME: seahub_db
+    volumes:
+      - ${APPDATA}/seadoc-data:/shared
+    networks:
+      - ingress
+      - seafile
+    labels:
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.seadoc.rule: "Host(`files.bakers.house`) && PathPrefix(`/sdoc-server/`)"
+      traefik.http.routers.seadoc.entrypoints: "https"
+      traefik.http.routers.seadoc.service: "seadoc"
+      traefik.http.routers.seadoc.middlewares: "seadoc-strip"
+      traefik.http.middlewares.seadoc-strip.stripprefix.prefixes: "/sdoc-server"
+      traefik.http.routers.seadoc-socketio.rule: "Host(`files.bakers.house`) && PathPrefix(`/socket.io/`)"
+      traefik.http.routers.seadoc-socketio.entrypoints: "https"
+      traefik.http.routers.seadoc-socketio.service: "seadoc"
+      traefik.http.services.seadoc.loadbalancer.server.port: "80"
+
+      bakers.monitoring.logs: "true"
+
+networks:
+  # The database, Redis and SeaSearch are reachable only from Seafile's services.
+  seafile:
+    internal: true
+  ingress:
+    name: ingress
+    external: true

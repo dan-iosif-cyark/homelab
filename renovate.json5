@@ -1,0 +1,90 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  // Includes config:recommended, digest pinning for Docker images and GitHub
+  // Actions, and config migration PRs.
+  extends: ["config:best-practices"],
+  // This repository is a fork, which Renovate skips unless told otherwise.
+  forkProcessing: "enabled",
+  timezone: "Europe/London",
+  labels: ["dependencies"],
+
+  // Nothing is proposed until it has been public for 3 days. Updates without
+  // a release timestamp are held back rather than let through early.
+  minimumReleaseAge: "3 days",
+  minimumReleaseAgeBehaviour: "timestamp-required",
+  // Don't open a branch for an update that is still inside the delay.
+  internalChecksFilter: "strict",
+
+  packageRules: [
+    {
+      description: "Major updates wait for approval on the Dependency Dashboard",
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+      addLabels: ["major"],
+    },
+    {
+      // Renovate only gets release timestamps from Docker Hub, so an image
+      // from any other registry would sit pending forever. scripts/compose-policy.py
+      // rejects those unless excepted; when one is, a human does the waiting.
+      description: "Images outside Docker Hub wait for approval on the Dependency Dashboard",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["/^[^/]+\\.[^/]+//"],
+      minimumReleaseAgeBehaviour: "timestamp-optional",
+      dependencyDashboardApproval: true,
+    },
+    {
+      // Tags look like release-4.0.20.3014, or release-1.43.4.10903-e5521bd8c
+      // for Plex; the release-<commit> tags beside them don't match.
+      description: "hotio images",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/hotio/**"],
+      versioning: "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-[0-9a-f]{7,})?$",
+    },
+    {
+      // Tags look like v0.11.0-ls272, where ls<n> is linuxserver's build.
+      description: "linuxserver images",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["linuxserver/**"],
+      matchCurrentValue: "/-ls\\d+$/",
+      versioning: "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$",
+    },
+    {
+      description: "Batch linter and CI tooling into one weekly PR",
+      matchManagers: ["mise", "github-actions", "custom.regex"],
+      matchDepNames: ["!/^maxlerebourg\\//"],
+      groupName: "tooling",
+      schedule: ["* 0-5 * * 1"],
+    },
+    {
+      description: "Traefik plugins are part of the Traefik deployment, not tooling",
+      matchDepNames: ["/^maxlerebourg\\//"],
+      addLabels: ["traefik"],
+    },
+  ],
+
+  customManagers: [
+    {
+      customType: "regex",
+      description: "Traefik plugins pinned in the static config",
+      managerFilePatterns: ["/(^|/)traefik\\.ya?ml$/"],
+      matchStrings: [
+        'moduleName:\\s*"github\\.com/(?<depName>[^"]+)"\\s+version:\\s*"(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: "github-tags",
+    },
+    {
+      // The version appears twice on each import line; each is its own match.
+      customType: "regex",
+      description: "hk's Pkl package, kept in step with the hk binary in mise.toml",
+      managerFilePatterns: ["/(^|/)hk\\.pkl$/"],
+      matchStrings: [
+        "jdx/hk/releases/download/v(?<currentValue>\\d+\\.\\d+\\.\\d+)/",
+        "/hk@(?<currentValue>\\d+\\.\\d+\\.\\d+)#",
+      ],
+      depNameTemplate: "hk",
+      packageNameTemplate: "jdx/hk",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+  ],
+}

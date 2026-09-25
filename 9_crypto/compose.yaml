@@ -1,0 +1,32 @@
+name: crypto
+
+services:
+  # A private Monero node for wallets on the LAN, with its dashboard. Nothing
+  # is forwarded on the router: the node makes outbound peer connections only.
+  monero:
+    image: jnbarlow/monero-nodeboard:1.0.10@sha256:e74ed79a72a80e254878e55dfa8341bf5498a1dcb25f21bfabb81cb0fc5f021c
+    restart: unless-stopped
+    environment:
+      TICKER: "true" # show the XMR price on the dashboard
+    volumes:
+      - ${APPDATA}/monero-nodeboard:/config # bitmonero.conf
+      - ${DATA}/xmr-blockchain:/app/blockchain
+    networks:
+      - monero
+    # Both give full control of the node: the dashboard proxies its /api to the
+    # unrestricted RPC without authentication. Keep them on the LAN.
+    ports:
+      - "192.168.1.192:3000:3000" # dashboard
+      - "192.168.1.192:18081:18081" # RPC, for wallets
+    # Runs as root; take away the capabilities it doesn't need.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/jnbarlow/unraid_templates/main/images/monero-symbol-480.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:3000]"
+      bakers.monitoring.logs: "true"
+
+networks:
+  monero: {}

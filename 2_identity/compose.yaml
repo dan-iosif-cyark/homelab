@@ -1,0 +1,134 @@
+# Shared by the Authentik server and worker.
+x-authentik-environment: &authentik-environment
+  AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?required}
+  AUTHENTIK_POSTGRESQL__HOST: authentik-db
+  AUTHENTIK_POSTGRESQL__NAME: authentik
+  AUTHENTIK_POSTGRESQL__USER: authentik
+  AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASS:?required}
+  AUTHENTIK_ERROR_REPORTING__ENABLED: "true"
+  # Postmark over STARTTLS. Not port 25: the ISP blocks it.
+  AUTHENTIK_EMAIL__HOST: smtp.postmarkapp.com
+  AUTHENTIK_EMAIL__PORT: 587
+  AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL_USERNAME:?required}
+  AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD:?required}
+  AUTHENTIK_EMAIL__USE_TLS: "true"
+  AUTHENTIK_EMAIL__USE_SSL: "false"
+  AUTHENTIK_EMAIL__TIMEOUT: 10
+  AUTHENTIK_EMAIL__FROM: authentik@homelab.bakers.house
+
+name: identity
+
+services:
+  authentik-db:
+    image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_PG_PASS:?required}
+    volumes:
+      - ${APPDATA}/authentik_db:/var/lib/postgresql/data
+    networks:
+      - authentik
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      bakers.monitoring.logs: "true"
+
+  # Named "authentik" so Traefik's forward-auth middleware (fileConfig.yml)
+  # reaches it at http://authentik:9000.
+  authentik:
+    image: authentik/server:2026.8.2@sha256:ff8489a5af4f4fe415ffd180a8e3c10b120bc2592d13d79dac050d977f7b9ecd
+    restart: unless-stopped
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+    command: server
+    environment:
+      <<: *authentik-environment
+    volumes:
+      - ${APPDATA}/authentik/data:/data
+      - ${APPDATA}/authentik/custom-templates:/templates
+    networks:
+      - ingress
+      - authentik
+    shm_size: 512mb
+    labels:
+      # Unraid
+      net.unraid.docker.webui: "https://auth.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.authentik.rule: "Host(`auth.bakers.house`)"
+      traefik.http.routers.authentik.entrypoints: "https"
+      traefik.http.services.authentik.loadbalancer.server.port: "9000"
+
+      bakers.monitoring.logs: "true"
+
+  # Runs as the image's own user and without the Docker socket, so Authentik's
+  # Docker outpost integration is unavailable; outposts are deployed by hand.
+  authentik-worker:
+    image: authentik/server:2026.8.2@sha256:ff8489a5af4f4fe415ffd180a8e3c10b120bc2592d13d79dac050d977f7b9ecd
+    restart: unless-stopped
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+    command: worker
+    environment:
+      <<: *authentik-environment
+    volumes:
+      - ${APPDATA}/authentik/data:/data
+      - ${APPDATA}/authentik/certs:/certs
+      - ${APPDATA}/authentik/custom-templates:/templates
+    networks:
+      - authentik
+      - egress
+    shm_size: 512mb
+    labels:
+      bakers.monitoring.logs: "true"
+
+  vaultwarden:
+    image: vaultwarden/server:1.37.3@sha256:1587c45feaa479f1f5e8af3b00eded36bff77bcf1880cf8dbf0541706dd470e0
+    restart: unless-stopped
+    environment:
+      DOMAIN: https://passwords.bakers.house
+      SSO_ENABLED: "true"
+      SSO_ONLY: "true" # no email and master password login
+      SSO_AUTHORITY: https://auth.bakers.house/application/o/vaultwarden/
+      SSO_CLIENT_ID: ${VAULTWARDEN_SSO_CLIENT_ID:?required}
+      SSO_CLIENT_SECRET: ${VAULTWARDEN_SSO_CLIENT_SECRET:?required}
+      SSO_SCOPES: email profile offline_access
+      SSO_SIGNUPS_MATCH_EMAIL: "true" # first SSO login claims the account with that email
+      SSO_ALLOW_UNKNOWN_EMAIL_VERIFICATION: "false"
+      SSO_CLIENT_CACHE_EXPIRATION: 0
+    volumes:
+      - ${APPDATA}/vaultwarden:/data
+    networks:
+      - ingress
+    labels:
+      # Unraid
+      net.unraid.docker.webui: "https://passwords.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.vaultwarden.rule: "Host(`passwords.bakers.house`)"
+      traefik.http.routers.vaultwarden.entrypoints: "https"
+      traefik.http.services.vaultwarden.loadbalancer.server.port: "80"
+
+      bakers.monitoring.logs: "true"
+
+networks:
+  # The database is reachable only from the Authentik server and worker.
+  authentik:
+    internal: true
+  # Outbound only (SMTP, update checks); nothing is routed in.
+  egress:
+  ingress:
+    name: ingress
+    external: true

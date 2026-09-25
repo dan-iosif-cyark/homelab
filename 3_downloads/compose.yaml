@@ -1,0 +1,249 @@
+name: downloads
+
+# Web UIs stay on the LAN ports they had as Unraid Apps; only Seerr is routed
+# through Traefik. Services keep their old container names as service names,
+# so the URLs the apps use to reach each other still resolve.
+
+services:
+  qbittorrent:
+    image: ghcr.io/hotio/qbittorrent:release-5.2.3@sha256:3b3093e955f7a40afc15dce6e2ebc44c7ffa99fe22b008b915eeed9cd0b1c658
+    restart: unless-stopped
+    environment:
+      PUID: 0 # TODO(hardening): run as 99:100
+      PGID: 0
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/qbittorrent:/config
+      - ${DATA}/torrents:/data/torrents
+    networks:
+      - downloads
+    # The peer port must match qBittorrent's "Port used for incoming
+    # connections" and be forwarded to 192.168.1.192 on the router.
+    ports:
+      - "192.168.1.192:20007:8080"
+      - "192.168.1.192:56881:56881/tcp"
+      - "192.168.1.192:56881:56881/udp"
+    labels:
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/qbittorrent.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:20007]"
+      bakers.monitoring.logs: "true"
+
+  sabnzbd:
+    image: ghcr.io/hotio/sabnzbd:release-5.1.3@sha256:105f36cd6f21a6576fa2e68f6cd0bb54b7d062cc72a6db9da713cb098417fb2e
+    restart: unless-stopped
+    environment:
+      PUID: 0 # TODO(hardening): run as 99:100
+      PGID: 0
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/sabnzbd:/config
+      - ${DATA}/usenet:/data/usenet
+    networks:
+      - downloads
+    ports:
+      - "192.168.1.192:20008:8080"
+    labels:
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/sabnzbd.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:20008]"
+      bakers.monitoring.logs: "true"
+
+  prowlarr:
+    image: ghcr.io/hotio/prowlarr:release-2.6.5.5623@sha256:2b1377a5cbc1d5805ff8c084ce4a757199151e67b5ba6bb769e1714dd5940fdb
+    restart: unless-stopped
+    environment:
+      PUID: 99
+      PGID: 100
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/prowlarr:/config
+    networks:
+      - downloads
+    ports:
+      - "192.168.1.192:20002:9696"
+    labels:
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/prowlarr.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:20002]"
+      bakers.monitoring.logs: "true"
+
+  sonarr:
+    image: ghcr.io/hotio/sonarr:release-4.0.20.3014@sha256:c878b7f6fcb8bf297a6a2a0947b0dfbe133f69218e89cd863fac7835a3767710
+    restart: unless-stopped
+    environment:
+      PUID: 0 # TODO(hardening): run as 99:100
+      PGID: 0
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/sonarr:/config
+      - ${DATA}:/data
+    networks:
+      - downloads
+      - plex
+    ports:
+      - "192.168.1.192:20004:8989"
+    labels:
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/sonarr.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:20004]"
+      bakers.monitoring.logs: "true"
+
+  radarr:
+    image: ghcr.io/hotio/radarr:release-6.4.4.10685@sha256:cee84774067e3d19c773ddcb3a7181013848806529ebd89ce34eb4d214695d4d
+    restart: unless-stopped
+    environment:
+      PUID: 0 # TODO(hardening): run as 99:100
+      PGID: 0
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/radarr:/config
+      - ${DATA}:/data
+    networks:
+      - downloads
+      - plex
+    ports:
+      - "192.168.1.192:20003:7878"
+    labels:
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/radarr.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:20003]"
+      bakers.monitoring.logs: "true"
+
+  # hotio's mylar3 image stopped updating in 2022, so this one is linuxserver's.
+  mylar3:
+    image: linuxserver/mylar3:v0.11.0-ls272@sha256:64df3a9d583e051f49fb349e9bc44f5804dab152bc866be8dd8a2869ac152cf9
+    restart: unless-stopped
+    environment:
+      PUID: 99
+      PGID: 100
+      UMASK: "022"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/mylar3:/config
+      - ${DATA}/media/comics:/comics
+      - ${DATA}/usenet/incomplete/comics:/downloads
+    networks:
+      - downloads
+    ports:
+      - "192.168.1.192:20009:8090"
+    labels:
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/mylar3-logo.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:20009]"
+      bakers.monitoring.logs: "true"
+
+  lazylibrarian:
+    image: linuxserver/lazylibrarian:latest@sha256:3e26c0433f78632b93a3d95bd0a5270d6ba9f9a77091a7e6071cd58edca92def # dclint disable-line service-image-require-explicit-tag
+    restart: unless-stopped
+    environment:
+      PUID: 99
+      PGID: 100
+      UMASK: "022"
+      TZ: ${TZ}
+      DOCKER_MODS: linuxserver/mods:universal-calibre
+    volumes:
+      - ${APPDATA}/lazylibrarian:/config
+      - ${DATA}/torrents/books:/downloads
+      - ${DATA}/media/books:/books
+    networks:
+      - downloads
+    ports:
+      - "192.168.1.192:5299:5299"
+    labels:
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/lazylibrarian-logo.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:5299]"
+      bakers.monitoring.logs: "true"
+
+  shelfmark:
+    image: ghcr.io/calibrain/shelfmark:v1.3.15@sha256:9602290324993c801b319d3166b202b96bd9039af2416f0916dae03a5bdca815
+    restart: unless-stopped
+    environment:
+      PUID: 99
+      PGID: 100
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/shelfmark:/config
+      - ${APPDATA}/shelfmark/log:/var/log/shelfmark
+      - ${DATA}/media/books:/books
+      - ${DATA}/torrents/books:/client/path
+    networks:
+      - downloads
+    ports:
+      - "192.168.1.192:8084:8084"
+    labels:
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/nodiaque/unraid_template/refs/heads/master/nodiaque/images/shelfmark.png"
+      net.unraid.docker.webui: "http://[IP]:[PORT:8084]"
+      bakers.monitoring.logs: "true"
+
+  unpackerr:
+    image: ghcr.io/hotio/unpackerr:release-0.15.2@sha256:724c702e81727e3d90c42cf2b3d900674203906a6d135ba07416c9a3f9f67fbb
+    restart: unless-stopped
+    environment:
+      PUID: 0 # TODO(hardening): run as 99:100
+      PGID: 0
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/unpackerr:/config
+      - ${DATA}:/data
+    networks:
+      - downloads
+    labels:
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/unpackerr.png"
+      bakers.monitoring.logs: "true"
+
+  recyclarr:
+    image: recyclarr/recyclarr:8.7.2@sha256:6e69e009e1cd7493ff6093e8e187b5d3788c75b4a2c0c5127b6a1beda1c19728
+    restart: unless-stopped
+    user: "99:100"
+    environment:
+      TZ: ${TZ}
+      CRON_SCHEDULE: "@daily"
+      RECYCLARR_CREATE_CONFIG: "true"
+    volumes:
+      - ${APPDATA}/recyclarr:/config
+    networks:
+      - downloads
+    labels:
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/recyclarr/recyclarr/master/ci/notify/trash-icon.png"
+      bakers.monitoring.logs: "true"
+
+  seerr:
+    image: ghcr.io/hotio/seerr:release-3.4.1@sha256:258b375c780890a53bfc05befc83b6207112a62f827f2b3aaf06287288068cdb
+    restart: unless-stopped
+    environment:
+      PUID: 99
+      PGID: 100
+      UMASK: "002"
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/seerr:/config
+    networks:
+      - ingress
+      - downloads
+      - plex
+    labels:
+      # Unraid
+      net.unraid.docker.icon: "https://hotio.dev/webhook-avatars/seerr.png"
+      net.unraid.docker.webui: "https://seerr.bakers.house"
+
+      # Traefik
+      traefik.enable: "true"
+      traefik.docker.network: "ingress"
+      traefik.http.routers.seerr.rule: "Host(`seerr.bakers.house`)"
+      traefik.http.routers.seerr.entrypoints: "https"
+      traefik.http.services.seerr.loadbalancer.server.port: "5055"
+
+      bakers.monitoring.logs: "true"
+
+networks:
+  # The apps talk to each other and to indexers, trackers and Usenet
+  # providers, so this network needs outbound access.
+  downloads:
+  ingress:
+    name: ingress
+    external: true
+  plex:
+    # Shared with Plex (4_media), which Seerr, Sonarr and Radarr talk to.
+    name: plex
+    external: true

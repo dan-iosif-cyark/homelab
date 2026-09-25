@@ -1,0 +1,45 @@
+[settings]
+lockfile = true
+
+[tools]
+# Hooks and linting
+hk = "2.0.1"
+pkl = "0.32.1"
+
+# Compose
+"npm:dclint" = "3.1.0"
+"github:grafana/alloy" = "1.19.2"
+
+# YAML, Markdown, JSON5, TOML
+"npm:prettier" = "3.9.9"
+"pipx:yamllint" = "1.38.0"
+"pipx:check-jsonschema" = { version = "0.38.2", uvx_args = "--with pyjson5==2.0.0" }
+taplo = "0.10.0"
+
+# Scripts
+uv = "0.12.18"
+ruff = "0.16.8"
+shellcheck = "0.11.0"
+shfmt = "3.14.1"
+
+# GitHub Actions
+actionlint = "1.7.12"
+zizmor = "1.30.1"
+
+# Secrets
+gitleaks = "8.30.1"
+
+# Runtimes for the npm: backend
+node = "24.21.0"
+
+[tasks.setup]
+description = "Install pinned tools and the git hooks"
+run = ["mise install", "hk install --mise"]
+
+[tasks.lint]
+description = "Run every check against the whole repo"
+run = "hk check --all"
+
+[tasks.fix]
+description = "Apply every auto-fix against the whole repo"
+run = "hk fix --all"
