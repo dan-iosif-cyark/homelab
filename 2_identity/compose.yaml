@@ -6,10 +6,9 @@ x-authentik-environment: &authentik-environment
   AUTHENTIK_POSTGRESQL__USER: authentik
   AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASS:?required}
   AUTHENTIK_ERROR_REPORTING__ENABLED: "true"
-  # TODO: email doesn't send yet (`ak test_email` fails, and may never have
-  # worked). Try port 587 first: ISPs often block outbound 25.
+  # Postmark over STARTTLS. Not port 25: the ISP blocks it.
   AUTHENTIK_EMAIL__HOST: smtp.postmarkapp.com
-  AUTHENTIK_EMAIL__PORT: 25
+  AUTHENTIK_EMAIL__PORT: 587
   AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL_USERNAME:?required}
   AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD:?required}
   AUTHENTIK_EMAIL__USE_TLS: "true"

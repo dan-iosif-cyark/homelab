@@ -42,6 +42,18 @@ services:
     environment:
       TZ: ${TZ}
       KOMGA_LIBRARIES_SCAN_DIRECTORY_EXCLUSIONS: "#recycle,@eaDir"
+      # Sign-in through Authentik. These are Spring properties: dots become
+      # underscores and dashes are dropped.
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_PROVIDER: authentik
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_CLIENTID: ${KOMGA_OIDC_CLIENT_ID:?required}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_CLIENTSECRET: ${KOMGA_OIDC_CLIENT_SECRET:?required}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_CLIENTNAME: authentik
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_SCOPE: openid,email,profile
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_AUTHORIZATIONGRANTTYPE: authorization_code
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_AUTHENTIK_REDIRECTURI: "{baseUrl}/{action}/oauth2/code/{registrationId}"
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_AUTHENTIK_USERNAMEATTRIBUTE: preferred_username
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_AUTHENTIK_ISSUERURI: https://auth.bakers.house/application/o/komga/
+      KOMGA_OAUTH2ACCOUNTCREATION: "true" # create a Komga user on first sign-in
     volumes:
       - ${APPDATA}/Komga:/config
       - ${DATA}/media/comics:/books
